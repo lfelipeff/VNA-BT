@@ -11,11 +11,12 @@
     <string name="title_paired_devices">Paired Devices</string>
     <string name="title_other_devices">Other Available Devices</string>
     <string name="button_scan">Scan for devices</string>
+    <string name="NetworkInfo">Network Info:</string>
     <string name="RPM">Engine RPM:</string>
     <string name="EngineTemp">Engine Temp:</string>
     <string name="OilPressure">Oil Pressure:</string>
     <string name="Frames">CAN frames:</string>
     <string name="Latitude">Latitude:</string>
     <string name="Longitude">Longitude:</string>
-    <string name="Satellites">Satellites:</string>
+    <string name="Satellites">Satellites in View:</string>
 </resources>

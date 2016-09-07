@@ -47,8 +47,15 @@ public class MainActivity extends AppCompatActivity {
     private static final int RX_J1939 = 6;
     private static final int TX_J1708 = 8;
     private static final int RX_J1708 = 9;
-    private static final int VNA_MSG_GPS = 69;
     private static final int STATS = 23;
+    private static final int VNA_MSG_ACONN = 25; // obd2 auto connect
+    private static final int VNA_MSG_FA_I15765 = 40; // pid filter add
+    private static final int VNA_MSG_FD_I15765 = 41; // pid filter delete
+    private static final int VNA_MSG_TX_I15765 = 42; // pid tx
+    private static final int VNA_MSG_RX_I15765 = 43; // pid rx
+    private static final int VNA_MSG_PX_I15765 = 44; // pid tx - periodic
+    private static final int VNA_MSG_GPS = 69;
+    private static final int VNA_MSG_REQ = 255; // request vna_msg
     private static final double KM_TO_MI = 0.621371;
     private static final double L_TO_GAL = 0.264172;
     private static final double KPA_TO_PSI = 0.145037738;
@@ -67,9 +74,10 @@ public class MainActivity extends AppCompatActivity {
     private HashMap<String, String> newData;
     private HashMap<String, Integer> monitorFields;
 
-    double latInDegrees;
-    double lonInDegrees;
-    int noofSatellites;
+    private int network_type = 0;
+    private double latInDegrees = 0;
+    private double lonInDegrees = 0;
+    private int noofSatellites = 0;
 
 
     @Override
@@ -141,6 +149,8 @@ public class MainActivity extends AppCompatActivity {
         newData = new HashMap<>();
         monitorFields = new HashMap<>();
 
+        newData.put("Network Type", "");
+        monitorFields.put("Network Type", R.id.NetworkInfoField);
         newData.put("RPM", "");
         monitorFields.put("RPM", R.id.RPMField);
         newData.put("Coolant", "");
@@ -187,7 +197,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
             connected = true;
-            init_j1939();
+
+            m_buffer = new byte[4096];
+            m_count = 0;
+
+            sendAutoConnect();
+
             if(readThread != null && readThread.isAlive()) {
                 readThread.interrupt();
                 while(readThread.isAlive()) Thread.yield();
@@ -409,7 +424,65 @@ public class MainActivity extends AppCompatActivity {
                 });
                 break;
 
+            case VNA_MSG_ACONN:
+                // Byte 0,1:        message length
+                // Byte 2:          msgID
+                // Byte 3:          port
+                // Byte 4:          status / bus speed
+                // Byte 5:          network type
+
+                out = String.format("port=%d", (packet[3] & 0xFF));
+
+                switch (packet[4] & 0xFF)
+                {
+                    case 0:
+                        out += " / 250K";
+                        break;
+
+                    case 1:
+                        out += " / 500K";
+                        break;
+
+                    case 254:
+                        out += " / auto-connect failed";
+                        break;
+
+                    case 255:
+                        out += " / initial state - no attempt";
+                        break;
+                }
+
+                network_type = (packet[5] & 0xFF);
+                switch (network_type)
+                {
+                    case 0:
+                        out += " / 11bit-OBD2";
+                        break;
+
+                    case 1:
+                        out += " / 29bit-OBD2";
+                        break;
+
+                    case 2:
+                        out += " / J1939";
+                        break;
+                }
+
+                newData.put("Network Info:", out);
+
+                this.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        updateLabels();
+                    }
+                });
+                break;
+
+            case VNA_MSG_RX_I15765:
+                break;
+
             case VNA_MSG_GPS:
+                // Byte 0,1:        message length
                 // Byte 2:          msgID
                 // Byte 3:          lat degrees
                 // Byte 4:          lat minutes
@@ -428,7 +501,7 @@ public class MainActivity extends AppCompatActivity {
                         | ((packet[6] & 0xFF) << 8)
                         | (packet[7] & 0xFF)) / 100000)) / 60))
                         * (((packet[8] & 0xFF) == 'S') ? -1 : 1);
-                newData.put("Latitude", String.format("%.6f", latInDegrees));
+                newData.put("Latitude", String.format("%.7f", latInDegrees));
 
                 // Longitude = Degrees + (Minutes + .minutes) / 60
                 lonInDegrees = ((packet[9] & 0xFF)
@@ -437,7 +510,7 @@ public class MainActivity extends AppCompatActivity {
                         | ((packet[12] & 0xFF) << 8)
                         | (packet[13] & 0xFF)) / 100000)) / 60))
                         * (((packet[14] & 0xFF) == 'W') ? -1 : 1);
-                newData.put("Longitude", String.format("%.6f", lonInDegrees));
+                newData.put("Longitude", String.format("%.7f", lonInDegrees));
 
                 noofSatellites = packet[15];
                 newData.put("Satellites", noofSatellites + "");
@@ -515,10 +588,52 @@ public class MainActivity extends AppCompatActivity {
         return (int)b & 0xFF;
     }
 
+    private void sendAutoConnect()
+    {
+        sendCommand(requestAutoConnect((byte) 0));
+    }
+
+    public TxStruct requestAutoConnect(byte port)
+    {
+        byte[] message = new byte[6];
+
+        message[0] = 0;
+        message[1] = 3 + 1;
+        message[2] = (byte) VNA_MSG_REQ;
+        message[3] = (byte) VNA_MSG_ACONN;
+        message[4] = port;
+        message[5] = (byte) cksum(message);
+
+        byte[] stuffed = new byte[2 * message.length];
+        // Tack on beginning of string marker
+        stuffed[0] = RS232_FLAG;
+        int esc_cnt = 1;
+        int cnt;
+        // Bytestuff
+        for (cnt = 0; cnt < message.length; cnt++)
+        {
+            if (message[cnt] == RS232_FLAG)
+            {
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE;
+                esc_cnt++;
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE_FLAG;
+            }
+            else if (message[cnt] == RS232_ESCAPE)
+            {
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE;
+                esc_cnt++;
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE_ESCAPE;
+            }
+            else
+            {
+                stuffed[cnt + esc_cnt] = message[cnt];
+            }
+        }
+        return new TxStruct(stuffed, cnt + esc_cnt);
+    }
+
     private void init_j1939()
     {
-        m_buffer = new byte[4096];
-        m_count = 0;
         // trimUntil = 0;
         long[] initPGN_AddFilter = {61444, 65262, 65263};
 
@@ -557,7 +672,7 @@ public class MainActivity extends AppCompatActivity {
         int esc_cnt = 1;
 
         // Bytestuff
-        for( cnt = 0; cnt < 8; cnt++ )
+        for( cnt = 0; cnt < message.length; cnt++ )
         {
             if( message[cnt] == RS232_FLAG )
             {

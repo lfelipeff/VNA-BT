@@ -24,6 +24,22 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="@string/NetworkInfo"
+            android:id="@+id/NetworkInfoLabel" />
+
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="@string/data_blank"
+            android:id="@+id/NetworkInfoField"
+            android:layout_gravity="end"
+            android:gravity="end" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
             android:text="@string/RPM"
             android:id="@+id/RPMLabel" />
 
