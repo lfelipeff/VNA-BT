@@ -19,6 +19,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
+import android.os.Handler;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -73,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
     private int m_size;
     private HashMap<String, String> newData;
     private HashMap<String, Integer> monitorFields;
+
+    private Handler handlerPeriodic;
 
     private int network_type = 0;
     private double latInDegrees = 0;
@@ -201,7 +204,8 @@ public class MainActivity extends AppCompatActivity {
             m_buffer = new byte[4096];
             m_count = 0;
 
-            sendAutoConnect();
+            handlerPeriodic = new Handler();
+            handlerPeriodic.post(runnablePeriodic);
 
             if(readThread != null && readThread.isAlive()) {
                 readThread.interrupt();
@@ -588,10 +592,18 @@ public class MainActivity extends AppCompatActivity {
         return (int)b & 0xFF;
     }
 
-    private void sendAutoConnect()
-    {
-        sendCommand(requestAutoConnect((byte) 0));
-    }
+    private Runnable runnablePeriodic = new Runnable() {
+        @Override
+        public void run() {
+            if (connected) {
+                // Send Auto Connect periodically
+                sendCommand(requestAutoConnect((byte) 0));
+
+                // Repeat this the same runnable code block again another 2 seconds
+                handlerPeriodic.postDelayed(runnablePeriodic, 2000);
+            }
+        }
+    };
 
     public TxStruct requestAutoConnect(byte port)
     {
@@ -604,31 +616,27 @@ public class MainActivity extends AppCompatActivity {
         message[4] = port;
         message[5] = (byte) cksum(message);
 
-        byte[] stuffed = new byte[2 * message.length];
+        byte[] stuffed = new byte[3 * message.length];
+        int cnt;
+
         // Tack on beginning of string marker
         stuffed[0] = RS232_FLAG;
         int esc_cnt = 1;
-        int cnt;
-        // Bytestuff
-        for (cnt = 0; cnt < message.length; cnt++)
-        {
-            if (message[cnt] == RS232_FLAG)
-            {
+        // bytestuff
+        for (cnt = 0; cnt < message.length; cnt++) {
+            if (message[cnt] == RS232_FLAG) {
                 stuffed[cnt + esc_cnt] = RS232_ESCAPE;
                 esc_cnt++;
                 stuffed[cnt + esc_cnt] = RS232_ESCAPE_FLAG;
-            }
-            else if (message[cnt] == RS232_ESCAPE)
-            {
+            } else if (message[cnt] == RS232_ESCAPE) {
                 stuffed[cnt + esc_cnt] = RS232_ESCAPE;
                 esc_cnt++;
                 stuffed[cnt + esc_cnt] = RS232_ESCAPE_ESCAPE;
-            }
-            else
-            {
+            } else {
                 stuffed[cnt + esc_cnt] = message[cnt];
             }
         }
+
         return new TxStruct(stuffed, cnt + esc_cnt);
     }
 
