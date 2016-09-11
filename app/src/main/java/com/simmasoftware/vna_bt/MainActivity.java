@@ -32,6 +32,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "VNA-BT";
 
+    private static final byte PORT_0 = 0;
+    private static final byte PID_RPM = 12;
+
     private static final int REQUEST_CONNECT_DEVICE_INSECURE = 1;
     private static final UUID sppUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final byte RS232_FLAG = (byte) 0xC0;
@@ -75,12 +78,13 @@ public class MainActivity extends AppCompatActivity {
     private HashMap<String, String> newData;
     private HashMap<String, Integer> monitorFields;
 
-    private Handler handlerPeriodic;
-
     private int network_type = 0;
-    private double latInDegrees = 0;
+    private int rpm = 0;
     private double lonInDegrees = 0;
     private int noofSatellites = 0;
+    private double latInDegrees = 0;
+
+    private Handler handlerPeriodic;
 
 
     @Override
@@ -89,6 +93,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         initTextViews();
+
+        handlerPeriodic = new Handler();
     }
 
 
@@ -152,8 +158,8 @@ public class MainActivity extends AppCompatActivity {
         newData = new HashMap<>();
         monitorFields = new HashMap<>();
 
-        newData.put("Network Type", "");
-        monitorFields.put("Network Type", R.id.NetworkInfoField);
+        newData.put("Network Info", "");
+        monitorFields.put("Network Info", R.id.NetworkInfoField);
         newData.put("RPM", "");
         monitorFields.put("RPM", R.id.RPMField);
         newData.put("Coolant", "");
@@ -204,7 +210,6 @@ public class MainActivity extends AppCompatActivity {
             m_buffer = new byte[4096];
             m_count = 0;
 
-            handlerPeriodic = new Handler();
             handlerPeriodic.post(runnablePeriodic);
 
             if(readThread != null && readThread.isAlive()) {
@@ -375,9 +380,12 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     //Have we received the entire message? If so, is it valid?
-                    if (m_count == m_size && val == cksum(m_buffer, m_count -1)) {
-                        m_count--; //Ignore the checksum at the end of the message
-                        processPacket(m_buffer);
+                    if (m_count == m_size) {
+                        if (m_buffer[m_count - 1] == cksum(m_buffer, (m_count - 1))) {
+                            byte[] payload = new byte[m_count - 3];
+                            System.arraycopy(m_buffer, 2, payload, 0, payload.length);
+                            processPacket(payload);
+                        }
                     }
                 }
             }
@@ -387,28 +395,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void processPacket(byte[] packet) {
-        int msgID = packet[2];
+        int msgID = packet[0];
         switch (msgID) {
             case RX_J1939:
-                final Integer pgn = ((packet[4] & 0xFF) << 16) | ((packet[5] & 0xFF) << 8) | (packet[6] & 0xFF);
+                final Integer pgn = ((packet[2] & 0xFF) << 16) | ((packet[3] & 0xFF) << 8) | (packet[4] & 0xFF);
                 Double d;
                 Integer i;
                 String out;
                 switch (pgn) {
                     case 61444:
-                        i = ((packet[14] & 0xFF) << 8) | (packet[13] & 0xFF);
+                        i = ((packet[12] & 0xFF) << 8) | (packet[11] & 0xFF);
                         if(i.equals(MAX_16)) break;
                         newData.put("RPM", (i * 0.125 + "")); /* SPN 190 */
                         break;
                     case 65262:
-                        i = (packet[10] & 0xFF);
+                        i = (packet[8] & 0xFF);
                         if(i.equals(MAX_8)) break;
                         d = (i - 40) * 9 / 5.0 + 32;
                         out = String.format("%.1f%s",d,DEGREE);
                         newData.put("Coolant",out); /* SPN 110 */
                         break;
                     case 65263:
-                        i = (packet[13] & 0xFF);
+                        i = (packet[11] & 0xFF);
                         if(i.equals(MAX_8)) break;
                         d = i * 4 * KPA_TO_PSI;
                         out = String.format("%.2f psi",d);
@@ -418,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
                 break;
 
             case STATS:
-                Long canFramesCount = (long) (((packet[11] & 0xFF) << 24) | ((packet[12] & 0xFF) << 16) | ((packet[13] & 0xFF) << 8) | (packet[14] & 0xFF));
+                Long canFramesCount = (long) (((packet[9] & 0xFF) << 24) | ((packet[10] & 0xFF) << 16) | ((packet[11] & 0xFF) << 8) | (packet[12] & 0xFF));
                 newData.put("Frames", canFramesCount + " frames");
                 this.runOnUiThread(new Runnable() {
                     @Override
@@ -429,22 +437,21 @@ public class MainActivity extends AppCompatActivity {
                 break;
 
             case VNA_MSG_ACONN:
-                // Byte 0,1:        message length
-                // Byte 2:          msgID
-                // Byte 3:          port
-                // Byte 4:          status / bus speed
-                // Byte 5:          network type
+                // Byte 0:          msgID
+                // Byte 1:          port
+                // Byte 2:          status / bus speed
+                // Byte 3:          network type
 
-                out = String.format("port=%d", (packet[3] & 0xFF));
+                out = String.format("Port %d", (packet[1] & 0xFF));
 
-                switch (packet[4] & 0xFF)
+                switch (packet[2] & 0xFF)
                 {
                     case 0:
-                        out += " / 250K";
+                        out += " / 250kbps";
                         break;
 
                     case 1:
-                        out += " / 500K";
+                        out += " / 500kbps";
                         break;
 
                     case 254:
@@ -456,15 +463,17 @@ public class MainActivity extends AppCompatActivity {
                         break;
                 }
 
-                network_type = (packet[5] & 0xFF);
+                network_type = (packet[3] & 0xFF);
                 switch (network_type)
                 {
                     case 0:
                         out += " / 11bit-OBD2";
+                        sendCommand(requestFunctional(PORT_0, PID_RPM));
                         break;
 
                     case 1:
                         out += " / 29bit-OBD2";
+                        sendCommand(requestFunctional(PORT_0, PID_RPM));
                         break;
 
                     case 2:
@@ -472,7 +481,7 @@ public class MainActivity extends AppCompatActivity {
                         break;
                 }
 
-                newData.put("Network Info:", out);
+                newData.put("Network Info", out);
 
                 this.runOnUiThread(new Runnable() {
                     @Override
@@ -483,40 +492,52 @@ public class MainActivity extends AppCompatActivity {
                 break;
 
             case VNA_MSG_RX_I15765:
+                // Is this a powertrain response (0x41) for RPM (12)?
+                if (((packet[6] & 0xFF) == 0x41) && ((packet[7] & 0xFF) == PID_RPM)) {
+                    // 1/4 rpm per bit
+                    rpm = (((packet[8] & 0xFF) << 8) | (packet[9] & 0xFF)) / 4;
+                    newData.put("RPM", rpm + "");
+                }
+
+                this.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        updateLabels();
+                    }
+                });
                 break;
 
             case VNA_MSG_GPS:
-                // Byte 0,1:        message length
-                // Byte 2:          msgID
-                // Byte 3:          lat degrees
-                // Byte 4:          lat minutes
-                // Byte 5,6,7:      lat decimal minutes
-                // Byte 8:          N or S (negative if South)
-                // Byte 9:          lon degrees
-                // Byte 10:         lon minutes
-                // Byte 11,12,13:   lon decimal minutes
-                // Byte 14:         E or W (negative if West)
-                // Byte 15:         Number of satellites in view
+                // Byte 0:          msgID
+                // Byte 1:          lat degrees
+                // Byte 2:          lat minutes
+                // Byte 3,4,5:      lat decimal minutes
+                // Byte 6:          N or S (negative if South)
+                // Byte 7:          lon degrees
+                // Byte 8:          lon minutes
+                // Byte 9,10,11:    lon decimal minutes
+                // Byte 12:         E or W (negative if West)
+                // Byte 13:         Number of satellites in view
 
                 // Latitude = Degrees + (Minutes + .minutes) / 60
-                latInDegrees = ((packet[3] & 0xFF)
-                        + (((packet[4] & 0xFF)
-                        + ((double) (((packet[5] & 0xFF) << 16)
-                        | ((packet[6] & 0xFF) << 8)
-                        | (packet[7] & 0xFF)) / 100000)) / 60))
-                        * (((packet[8] & 0xFF) == 'S') ? -1 : 1);
+                latInDegrees = ((packet[1] & 0xFF)
+                        + (((packet[2] & 0xFF)
+                        + ((double) (((packet[3] & 0xFF) << 16)
+                        | ((packet[4] & 0xFF) << 8)
+                        | (packet[5] & 0xFF)) / 100000)) / 60))
+                        * (((packet[6] & 0xFF) == 'S') ? -1 : 1);
                 newData.put("Latitude", String.format("%.7f", latInDegrees));
 
                 // Longitude = Degrees + (Minutes + .minutes) / 60
-                lonInDegrees = ((packet[9] & 0xFF)
-                        + (((packet[10] & 0xFF)
-                        + ((double) (((packet[11] & 0xFF) << 16)
-                        | ((packet[12] & 0xFF) << 8)
-                        | (packet[13] & 0xFF)) / 100000)) / 60))
-                        * (((packet[14] & 0xFF) == 'W') ? -1 : 1);
+                lonInDegrees = ((packet[7] & 0xFF)
+                        + (((packet[8] & 0xFF)
+                        + ((double) (((packet[9] & 0xFF) << 16)
+                        | ((packet[10] & 0xFF) << 8)
+                        | (packet[11] & 0xFF)) / 100000)) / 60))
+                        * (((packet[12] & 0xFF) == 'W') ? -1 : 1);
                 newData.put("Longitude", String.format("%.7f", lonInDegrees));
 
-                noofSatellites = packet[15];
+                noofSatellites = packet[13];
                 newData.put("Satellites", noofSatellites + "");
 
                 this.runOnUiThread(new Runnable() {
@@ -565,58 +586,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private byte[] buildMessage(byte[] payload) {
+        byte[] message = new byte[2 + payload.length + 1];
 
-    private int cksum(byte[] commandBytes)
-    {
-        int count = 0;
+        message[0] = (byte) (((payload.length + 1) >> 8) & 0xFF);
+        message[1] = (byte) ((payload.length + 1) & 0xFF);
+        System.arraycopy(payload, 0, message, 2, payload.length);
+        message[2 + payload.length] = (byte) cksum(message);
 
-        for (int i = 1; i < commandBytes.length; i++)
-        {
-            count += uByte(commandBytes[i]);
-        }
-
-        return (byte) (~(count & 0xFF) + (byte) 1);
+        return message;
     }
 
-    private int cksum(byte[] data, int numbytes) {
-        int count = 0;
-
-        for (int i = 0; i < numbytes; i++) {
-            count += uByte(data[i]);
-        }
-        return (byte) (~(count & 0xFF) + (byte) 1);
-    }
-
-    private int uByte(byte b)
-    {
-        return (int)b & 0xFF;
-    }
-
-    private Runnable runnablePeriodic = new Runnable() {
-        @Override
-        public void run() {
-            if (connected) {
-                // Send Auto Connect periodically
-                sendCommand(requestAutoConnect((byte) 0));
-
-                // Repeat this the same runnable code block again another 2 seconds
-                handlerPeriodic.postDelayed(runnablePeriodic, 2000);
-            }
-        }
-    };
-
-    public TxStruct requestAutoConnect(byte port)
-    {
-        byte[] message = new byte[6];
-
-        message[0] = 0;
-        message[1] = 3 + 1;
-        message[2] = (byte) VNA_MSG_REQ;
-        message[3] = (byte) VNA_MSG_ACONN;
-        message[4] = port;
-        message[5] = (byte) cksum(message);
-
-        byte[] stuffed = new byte[3 * message.length];
+    private byte[] stuffMessage(byte[] message) {
+        byte[] stuffed = new byte[1 + (2 * message.length)];
         int cnt;
 
         // Tack on beginning of string marker
@@ -637,16 +619,89 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        return new TxStruct(stuffed, cnt + esc_cnt);
+        byte[] retval = new byte[cnt + esc_cnt];
+        System.arraycopy(stuffed, 0, retval, 0, (cnt + esc_cnt));
+        return retval;
     }
 
-    private void init_j1939()
-    {
+    private int cksum(byte[] commandBytes) {
+        int count = 0;
+
+        for (int i = 1; i < commandBytes.length; i++) {
+            count += uByte(commandBytes[i]);
+        }
+
+        return (byte) (~(count & 0xFF) + (byte) 1);
+    }
+
+    private int cksum(byte[] data, int numbytes) {
+        int count = 0;
+
+        for (int i = 0; i < numbytes; i++) {
+            count += uByte(data[i]);
+        }
+        return (byte) (~(count & 0xFF) + (byte) 1);
+    }
+
+    private int uByte(byte b) {
+        return (int)b & 0xFF;
+    }
+
+    private Runnable runnablePeriodic = new Runnable() {
+        @Override
+        public void run() {
+            if (connected) {
+                // Send Auto Connect periodically
+                sendCommand(requestAutoConnect(PORT_0));
+
+                // Repeat the same runnable after 2 seconds
+                handlerPeriodic.postDelayed(runnablePeriodic, 2000);
+            }
+        }
+    };
+
+    public TxStruct requestAutoConnect(byte port) {
+        byte[] payload = new byte[3];
+
+        payload[0] = (byte) VNA_MSG_REQ;
+        payload[1] = (byte) VNA_MSG_ACONN;
+        payload[2] = port;
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
+    public TxStruct requestFunctional(byte port, byte pid) {
+        byte[] payload = new byte[8];
+
+        payload[0] = VNA_MSG_TX_I15765;
+        payload[1] = port;      // port
+        payload[3] = (byte) 0xF1;   // src, external test equipmt = 0xF1
+        payload[4] = 6;      // pri
+
+        // tat mapping: 11-physical=118, 29-functional=119, 11-physical=218, 29-functional=219
+        if (network_type == 0) {
+            payload[2] = 1;      // dst, unused since we are doing a functinoal request (i.e. 0x7DF request)
+            payload[5] = 119;    // tat, 11-bit functional request
+        } else if (network_type == 1) {
+            payload[2] = 0x33;   // dst, iso spec says a functional request has a dst of 0x33
+            payload[5] = (byte) 219;    // tat, 29-bit functional request
+        } else {
+    /* not 11-bt or 29-bit OBD2 */
+            return null;
+        }
+
+  /* 2 bytes of data */
+        payload[6] = 1;
+        payload[7] = pid;
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
+    private void init_j1939() {
         // trimUntil = 0;
         long[] initPGN_AddFilter = {61444, 65262, 65263};
 
-        for(long pgn:initPGN_AddFilter)
-        {
+        for(long pgn:initPGN_AddFilter) {
             sendCommand(filterAddDelJ1939((byte) 0, pgn, true));
         }
     }
@@ -701,8 +756,6 @@ public class MainActivity extends AppCompatActivity {
         }
         return new TxStruct(stuffed, cnt+esc_cnt);
     }
-
-
 
     private TxStruct requestPGNJ1939(byte port, long pgnLong)
     {
@@ -772,6 +825,11 @@ public class MainActivity extends AppCompatActivity {
             this.len = len;
         }
 
+        public TxStruct(byte[] buf) {
+            this.buf = buf;
+            this.len = buf.length;
+        }
+
         public void setLen(int length) {
             len = length;
         }
@@ -788,7 +846,4 @@ public class MainActivity extends AppCompatActivity {
             return buf;
         }
     }
-
-
-
 }
