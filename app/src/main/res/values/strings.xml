@@ -13,7 +13,7 @@
     <string name="button_scan">Scan for devices</string>
     <string name="NetworkInfo">Network Info:</string>
     <string name="RPM">Engine RPM:</string>
-    <string name="EngineTemp">Engine Temp:</string>
+    <string name="Odometer">Odometer:</string>
     <string name="OilPressure">Oil Pressure:</string>
     <string name="Frames">CAN frames:</string>
     <string name="Latitude">Latitude:</string>
