@@ -39,29 +39,43 @@ public class MainActivity extends AppCompatActivity {
     private static final byte RS232_ESCAPE = (byte) 0xDB;
     private static final byte RS232_ESCAPE_FLAG = (byte) 0xDC;
     private static final byte RS232_ESCAPE_ESCAPE = (byte) 0xDD;
-    private static final String DEGREE  = " \u00b0F";
+    private static final String DEGREE = " \u00b0F";
 
-    private static final int VNA_MSG_ACK            = 0;    // ack
-    private static final int VNA_MSG_FA_J1939       = 1;    // pgn filter add
-    private static final int VNA_MSG_FD_J1939       = 2;    // pgn filter delete
-    private static final int VNA_MSG_FA_J1708       = 3;    // pid filter add
-    private static final int VNA_MSG_FD_J1708       = 4;    // pid filter delete
-    private static final int VNA_MSG_TX_J1939       = 5;    // pgn tx
-    private static final int VNA_MSG_RX_J1939       = 6;    // pgn rx
-    private static final int VNA_MSG_PX_J1939       = 7;    // pgn tx - periodic
-    private static final int VNA_MSG_TX_J1708       = 8;    // pid tx
-    private static final int VNA_MSG_RX_J1708       = 9;    // pid rx
-    private static final int VNA_MSG_PX_J1587       = 10;   // pid tx - periodic
-    private static final int VNA_MSG_STATS          = 23;   // stats msg - 1 sec
-    private static final int VNA_MSG_ACONN          = 25;   // obd2 auto connect
-    private static final int VNA_MSG_FA_I15765      = 40;   // pid filter add
-    private static final int VNA_MSG_FD_I15765      = 41;   // pid filter delete
-    private static final int VNA_MSG_TX_I15765      = 42;   // pid tx
-    private static final int VNA_MSG_RX_I15765      = 43;   // pid rx
-    private static final int VNA_MSG_PX_I15765      = 44;   // pid tx - periodic
-    private static final int VNA_MSG_ODOMETER       = 46;   // odometer
-    private static final int VNA_MSG_GPS            = 69;   // gps info
-    private static final int VNA_MSG_REQ            = 255;  // request vna_msg
+    private static final int VNA_MSG_ACK = 0;    // ack
+    private static final int VNA_MSG_FA_J1939 = 1;    // pgn filter add
+    private static final int VNA_MSG_FD_J1939 = 2;    // pgn filter delete
+    private static final int VNA_MSG_FA_J1708 = 3;    // pid filter add
+    private static final int VNA_MSG_FD_J1708 = 4;    // pid filter delete
+    private static final int VNA_MSG_TX_J1939 = 5;    // pgn tx
+    private static final int VNA_MSG_RX_J1939 = 6;    // pgn rx
+    private static final int VNA_MSG_PX_J1939 = 7;    // pgn tx - periodic
+    private static final int VNA_MSG_TX_J1708 = 8;    // pid tx
+    private static final int VNA_MSG_RX_J1708 = 9;    // pid rx
+    private static final int VNA_MSG_PX_J1587 = 10;   // pid tx - periodic
+    private static final int VNA_MSG_STATS = 23;   // stats msg - 1 sec
+    private static final int VNA_MSG_ACONN = 25;   // obd2 auto connect
+    private static final int VNA_MSG_FA_I15765 = 40;   // pid filter add
+    private static final int VNA_MSG_FD_I15765 = 41;   // pid filter delete
+    private static final int VNA_MSG_TX_I15765 = 42;   // pid tx
+    private static final int VNA_MSG_RX_I15765 = 43;   // pid rx
+    private static final int VNA_MSG_PX_I15765 = 44;   // pid tx - periodic
+    private static final int VNA_MSG_ODOMETER = 46;   // odometer
+    private static final int VNA_MSG_ACONN_EXT = 52;   // auto connect extended
+    private static final int VNA_MSG_GPS = 69;   // gps info
+    private static final int VNA_MSG_REQ = 255;  // request vna_msg
+
+    private static final int NET_TYPE_OBD2_11 = (1 << 0);
+    private static final int NET_TYPE_OBD2_29 = (1 << 1);
+    private static final int NET_TYPE_OBD2 = (NET_TYPE_OBD2_29 | NET_TYPE_OBD2_11);
+    private static final int NET_TYPE_J1939 = (1 << 2);
+    private static final int NET_TYPE_RAW_11 = (1 << 3);
+    private static final int NET_TYPE_RAW_29 = (1 << 4);
+    private static final int NET_TYPE_RAW = (NET_TYPE_RAW_29 | NET_TYPE_RAW_11);
+    private static final int NET_TYPE_AUTOFAILED = (1 << 31);
+
+    private static final int NET_SPD_UNKNOWNERR = (1 << 29);
+    private static final int NET_SPD_AUTOFAILED = (1 << 30);
+    private static final int NET_SPD_INITSTATE = (1 << 31);
 
     private static final byte PID_RPM = 12;
 
@@ -83,7 +97,8 @@ public class MainActivity extends AppCompatActivity {
     private HashMap<String, String> newData;
     private HashMap<String, Integer> monitorFields;
 
-    private int network_type = 0;
+    private int network_type = NET_TYPE_AUTOFAILED;
+    private int network_speed = 0;
     private int rpm = 0;
     private int odometer = 0;
     private double latInDegrees = 0;
@@ -119,14 +134,11 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.action_connect) {
             connect_button = item;
 
-            if (item.getTitle().toString().compareToIgnoreCase("Disconnect")==0)
-            {
+            if (item.getTitle().toString().compareToIgnoreCase("Disconnect") == 0) {
                 item.setTitle("Connect");
 
                 disconnect();
-            }
-            else
-            {
+            } else {
                 item.setTitle("Connecting...");
 
                 Intent serverIntent = new Intent(this, DeviceListActivity.class);
@@ -138,14 +150,11 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public void onActivityResult(int requestCode, int resultCode, Intent data)
-    {
-        switch (requestCode)
-        {
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        switch (requestCode) {
             case REQUEST_CONNECT_DEVICE_INSECURE:
                 // When DeviceListActivity returns with a bluetoothDevice to connect
-                if (resultCode == Activity.RESULT_OK)
-                {
+                if (resultCode == Activity.RESULT_OK) {
                     final String address = data.getExtras().getString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
                     Thread connectThread = new Thread(new Runnable() {
                         @Override
@@ -171,33 +180,29 @@ public class MainActivity extends AppCompatActivity {
         monitorFields.put("Odometer", R.id.OdometerField);
         newData.put("Oil Pressure", "");
         monitorFields.put("Oil Pressure", R.id.OilPressureField);
-        newData.put("Frames","");
+        newData.put("Frames", "");
         monitorFields.put("Frames", R.id.CANFramesField);
-        newData.put("Latitude","");
+        newData.put("Latitude", "");
         monitorFields.put("Latitude", R.id.LatitudeField);
-        newData.put("Longitude","");
+        newData.put("Longitude", "");
         monitorFields.put("Longitude", R.id.LongitudeField);
-        newData.put("Satellites","");
+        newData.put("Satellites", "");
         monitorFields.put("Satellites", R.id.SatellitesField);
     }
 
-    private final Runnable readRun = new Runnable()
-    {
-        public void run()
-        {
+    private final Runnable readRun = new Runnable() {
+        public void run() {
             receiveDataFromBT(bluetoothSocket);
         }
     };
     private Thread readThread;
 
-    private BluetoothSocket connectDevice(String address, int i)
-    {
+    private BluetoothSocket connectDevice(String address, int i) {
         // Get the BluetoothDevice object
 
         BluetoothDevice bluetoothDevice = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(address);
         connected = false;
-        try
-        {
+        try {
             bluetoothSocket = bluetoothDevice.createRfcommSocketToServiceRecord(sppUUID);
             bluetoothSocket.connect();
 
@@ -217,23 +222,20 @@ public class MainActivity extends AppCompatActivity {
 
             handlerPeriodic.postDelayed(runnablePeriodic, 1000);
 
-            if(readThread != null && readThread.isAlive()) {
+            if (readThread != null && readThread.isAlive()) {
                 readThread.interrupt();
-                while(readThread.isAlive()) Thread.yield();
+                while (readThread.isAlive()) Thread.yield();
             } else {
                 readThread = new Thread(readRun);
                 readThread.setPriority(4);
                 readThread.start();
             }
 
-        }
-        catch (Exception ioex)
-        {
+        } catch (Exception ioex) {
             Log.e(TAG, "", ioex);
         }
 
-        if (!connected)
-        {
+        if (!connected) {
             // TODO: understand this
             if (i < 2) {
                 connectDevice(address, i + 1);
@@ -242,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         Toast.makeText(getApplicationContext(), "Bluetooth connection error, try again", Toast.LENGTH_SHORT).show();
-                        if(connect_button != null) connect_button.setTitle("Connect");
+                        if (connect_button != null) connect_button.setTitle("Connect");
                     }
                 });
 
@@ -255,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void reconnect() {
-        if(bluetoothSocket != null) {
+        if (bluetoothSocket != null) {
             String address = bluetoothSocket.getRemoteDevice().getAddress();
             connected = false;
             try {
@@ -275,17 +277,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void disconnect() {
-        try
-        {
-            if(readThread != null) readThread.interrupt();
-            if (bluetoothSocket != null)
-            {
+        try {
+            if (readThread != null) readThread.interrupt();
+            if (bluetoothSocket != null) {
                 bluetoothSocket.close();
                 bluetoothSocket = null;
             }
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             /* We don't really care about the reconnect exceptions */
             Log.e(TAG, "In reconnect", e);
         }
@@ -306,7 +304,7 @@ public class MainActivity extends AppCompatActivity {
 
             while (true) {
                 try {
-                    if(Thread.interrupted()) {
+                    if (Thread.interrupted()) {
                         inputStream.close();
                         return;
                     }
@@ -323,7 +321,7 @@ public class MainActivity extends AppCompatActivity {
                     parseMessage(buffer, buf_len);
 
                 } catch (IOException e) {
-                    if(Thread.interrupted()) {
+                    if (Thread.interrupted()) {
                         inputStream.close();
                         return;
                     }
@@ -331,13 +329,13 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 } catch (InterruptedException e) {
                     inputStream.close();
-                    Log.e(TAG,"Interrupted read",e);
+                    Log.e(TAG, "Interrupted read", e);
                     return;
                 }
             }
 
         } catch (IOException e) {
-            Log.e(TAG,"", e);
+            Log.e(TAG, "", e);
         }
     }
 
@@ -392,6 +390,9 @@ public class MainActivity extends AppCompatActivity {
                             System.arraycopy(m_buffer, 2, payload, 0, payload.length);
                             processPacket(payload);
                         }
+                        else {
+                            Log.v(TAG, "Wrong checksum!");
+                        }
                     }
                 }
             }
@@ -421,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
                 switch (pgn) {
                     case 61444:
                         i = ((packet[12] & 0xFF) << 8) | (packet[11] & 0xFF);
-                        if(i.equals(MAX_16)) break;
+                        if (i.equals(MAX_16)) break;
                         newData.put("RPM", (i * 0.125 + "")); /* SPN 190 */
                         break;
                     case 65262:
@@ -433,9 +434,9 @@ public class MainActivity extends AppCompatActivity {
                         break;
                     case 65263:
                         i = (packet[11] & 0xFF);
-                        if(i.equals(MAX_8)) break;
+                        if (i.equals(MAX_8)) break;
                         d = i * 4 * KPA_TO_PSI;
-                        out = String.format("%.2f psi",d);
+                        out = String.format("%.2f psi", d);
                         newData.put("Oil Pressure", out); /* SPN 100 */
                         break;
                 }
@@ -448,48 +449,49 @@ public class MainActivity extends AppCompatActivity {
                 newData.put("Frames", canFramesCount + " frames");
                 break;
 
-            case VNA_MSG_ACONN:
-                Log.v(TAG, "VNA_MSG_ACONN");
+            case VNA_MSG_ACONN_EXT:
+                Log.v(TAG, "VNA_MSG_ACONN_EXT");
 
                 // Byte 0:          message ID
                 // Byte 1:          port
-                // Byte 2:          status / bus speed
-                // Byte 3:          network type
+                // Byte 2,3,4,5:    network type
+                // Byte 6,7,8,9:    network speed
 
                 out = String.format("Port %d", (packet[1] & 0xFF));
 
-                switch (packet[2] & 0xFF)
-                {
+                network_type = ((packet[2] & 0xFF) << 24) | ((packet[3] & 0xFF) << 16) | ((packet[4] & 0xFF) << 8) | (packet[5] & 0xFF);
+                switch (network_type) {
+                    case NET_TYPE_OBD2_11:
+                        out += " / 11bit-OBD2";
+                        break;
+
+                    case NET_TYPE_OBD2_29:
+                        out += " / 29bit-OBD2";
+                        break;
+
+                    case NET_TYPE_J1939:
+                        out += " / J1939";
+                        break;
+
+                    case NET_TYPE_AUTOFAILED:
+                        out += " / auto-connect failed";
+                        break;
+                }
+
+                network_speed = ((packet[6] & 0xFF) << 24) | ((packet[7] & 0xFF) << 16) | ((packet[8] & 0xFF) << 8) | (packet[9] & 0xFF);
+                switch (network_speed) {
                     case 0:
+                    case 250000:
                         out += " / 250kbps";
                         break;
 
                     case 1:
+                    case 500000:
                         out += " / 500kbps";
                         break;
 
-                    case 254:
-                        out += " / auto-connect failed";
-                        break;
-
-                    case 255:
+                    case NET_SPD_INITSTATE:
                         out += " / initial state - no attempt";
-                        break;
-                }
-
-                network_type = (packet[3] & 0xFF);
-                switch (network_type)
-                {
-                    case 0:
-                        out += " / 11bit-OBD2";
-                        break;
-
-                    case 1:
-                        out += " / 29bit-OBD2";
-                        break;
-
-                    case 2:
-                        out += " / J1939";
                         break;
                 }
 
@@ -567,14 +569,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateLabels() {
-        for(Fragment f : getSupportFragmentManager().getFragments()) {
-            if(f != null && f.getClass().equals(MainActivityFragment.class)) {
+        for (Fragment f : getSupportFragmentManager().getFragments()) {
+            if (f != null && f.getClass().equals(MainActivityFragment.class)) {
                 for (Map.Entry<String, Integer> entry : monitorFields.entrySet()) {
                     Integer tv = entry.getValue();
                     String label = newData.get(entry.getKey());
                     if (!label.equals("")) {
                         if (tv != null) {
-                            ((MainActivityFragment)f).update(tv, label);
+                            ((MainActivityFragment) f).update(tv, label);
                         }
                     }
                 }
@@ -582,14 +584,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void sendCommand(TxStruct command)
-    {
-        try
-        {
-            bluetoothSocket.getOutputStream().write(command.getBuf(),0,command.getLen());
-        }
-        catch (IOException e)
-        {
+    private void sendCommand(TxStruct command) {
+        try {
+            bluetoothSocket.getOutputStream().write(command.getBuf(), 0, command.getLen());
+        } catch (IOException e) {
             Log.e(TAG, "Socket is closed", e);
         }
     }
@@ -652,7 +650,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private int uByte(byte b) {
-        return (int)b & 0xFF;
+        return (int) b & 0xFF;
     }
 
     private int tenths = 0;
@@ -661,17 +659,19 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             if (connected) {
-                switch (tenths) {
-                    case 0:
-                        sendCommand(requestAutoConnect(PORT_0));
-                        break;
-
-                    case 1:
-                        sendCommand(requestFunctional(PORT_0, PID_RPM));
-                        break;
-
-                    default:
-                        break;
+                if (network_type == NET_TYPE_AUTOFAILED) {
+                    switch (tenths) {
+                        case 0:
+                            sendCommand(requestAutoConnect(PORT_0));
+                            break;
+                    }
+                }
+                else if ((network_type == NET_TYPE_OBD2_11) || (network_type == NET_TYPE_OBD2_29)) {
+                    switch (tenths) {
+                        case 0:
+                            sendCommand(requestFunctional(PORT_0, PID_RPM));
+                            break;
+                    }
                 }
                 tenths++;
                 if (tenths >= 10)
@@ -687,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
         byte[] payload = new byte[3];
 
         payload[0] = (byte) VNA_MSG_REQ;
-        payload[1] = (byte) VNA_MSG_ACONN;
+        payload[1] = (byte) VNA_MSG_ACONN_EXT;
         payload[2] = port;
 
         return new TxStruct(stuffMessage(buildMessage(payload)));
@@ -702,18 +702,18 @@ public class MainActivity extends AppCompatActivity {
         payload[4] = 6;      // pri
 
         // tat mapping: 11-physical=118, 29-functional=119, 11-physical=218, 29-functional=219
-        if (network_type == 0) {
+        if (network_type == NET_TYPE_OBD2_11) {
             payload[2] = 1;      // dst, unused since we are doing a functinoal request (i.e. 0x7DF request)
             payload[5] = 119;    // tat, 11-bit functional request
-        } else if (network_type == 1) {
+        } else if (network_type == NET_TYPE_OBD2_29) {
             payload[2] = 0x33;   // dst, iso spec says a functional request has a dst of 0x33
             payload[5] = (byte) 219;    // tat, 29-bit functional request
         } else {
-    /* not 11-bt or 29-bit OBD2 */
+            // not 11-bt or 29-bit OBD2
             return null;
         }
 
-  /* 2 bytes of data */
+        // 2 bytes of data
         payload[6] = 1;
         payload[7] = pid;
 
@@ -724,13 +724,12 @@ public class MainActivity extends AppCompatActivity {
         // trimUntil = 0;
         long[] initPGN_AddFilter = {61444, 65262, 65263};
 
-        for(long pgn:initPGN_AddFilter) {
+        for (long pgn : initPGN_AddFilter) {
             sendCommand(filterAddDelJ1939((byte) 0, pgn, true));
         }
     }
 
-    public TxStruct filterAddDelJ1939(byte port, long pgnLong, boolean add)
-    {
+    public TxStruct filterAddDelJ1939(byte port, long pgnLong, boolean add) {
         byte[] pgn = new byte[3];
 
         pgn[0] = (byte) ((pgnLong >> 16) & 0xFF);
@@ -747,7 +746,7 @@ public class MainActivity extends AppCompatActivity {
         message[3] = port;
         System.arraycopy(pgn, 0, message, 4, 3);
 
-        message[7] = (byte) cksum( message);
+        message[7] = (byte) cksum(message);
 
 
         // Tack on beginning of string marker
@@ -758,30 +757,23 @@ public class MainActivity extends AppCompatActivity {
         int esc_cnt = 1;
 
         // Bytestuff
-        for( cnt = 0; cnt < message.length; cnt++ )
-        {
-            if( message[cnt] == RS232_FLAG )
-            {
-                stuffed[cnt+esc_cnt] = RS232_ESCAPE;
+        for (cnt = 0; cnt < message.length; cnt++) {
+            if (message[cnt] == RS232_FLAG) {
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE;
                 esc_cnt++;
-                stuffed[cnt+esc_cnt] = RS232_ESCAPE_FLAG;
-            }
-            else if( message[cnt] == RS232_ESCAPE )
-            {
-                stuffed[cnt+esc_cnt] = RS232_ESCAPE;
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE_FLAG;
+            } else if (message[cnt] == RS232_ESCAPE) {
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE;
                 esc_cnt++;
-                stuffed[cnt+esc_cnt] = RS232_ESCAPE_ESCAPE;
-            }
-            else
-            {
-                stuffed[cnt+esc_cnt] = message[cnt];
+                stuffed[cnt + esc_cnt] = RS232_ESCAPE_ESCAPE;
+            } else {
+                stuffed[cnt + esc_cnt] = message[cnt];
             }
         }
-        return new TxStruct(stuffed, cnt+esc_cnt);
+        return new TxStruct(stuffed, cnt + esc_cnt);
     }
 
-    private TxStruct requestPGNJ1939(byte port, long pgnLong)
-    {
+    private TxStruct requestPGNJ1939(byte port, long pgnLong) {
         // c0 00 0a 05 00 pp gg nn 00 00 00 ff xx
         //                  PGN
         byte[] pgn = new byte[3];
@@ -800,13 +792,13 @@ public class MainActivity extends AppCompatActivity {
         message[3] = port;
         System.arraycopy(new byte[]{(byte) 0x00, (byte) 0xEA, (byte) 0x00}, 0, message, 4, 3);
 
-        message[7] = (byte) 255; 	// destination addr
-        message[8] = (byte) 252;				// source addr
-        message[9] = 6;				// priority
+        message[7] = (byte) 255;    // destination addr
+        message[8] = (byte) 252;                // source addr
+        message[9] = 6;                // priority
 
         System.arraycopy(pgn, 0, message, 10, 3);
 
-        message[13]	= (byte) cksum(message);
+        message[13] = (byte) cksum(message);
 
         // Tack on beginning of string marker
         stuffed[0] = RS232_FLAG;
@@ -826,7 +818,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        return new TxStruct(stuffed, cnt+esc_cnt);
+        return new TxStruct(stuffed, cnt + esc_cnt);
     }
 
     class TxStruct {
@@ -862,7 +854,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void setBuf(int pos, byte data) {
-            if( pos >= 0 && pos < buf.length ) buf[pos] = data;
+            if (pos >= 0 && pos < buf.length) buf[pos] = data;
         }
 
         public byte[] getBuf() {
