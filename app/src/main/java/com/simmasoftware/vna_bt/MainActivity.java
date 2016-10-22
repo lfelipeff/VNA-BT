@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
+import android.net.Uri;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -41,28 +42,31 @@ public class MainActivity extends AppCompatActivity {
     private static final byte RS232_ESCAPE_ESCAPE = (byte) 0xDD;
     private static final String DEGREE = " \u00b0F";
 
-    private static final int VNA_MSG_ACK = 0;    // ack
-    private static final int VNA_MSG_FA_J1939 = 1;    // pgn filter add
-    private static final int VNA_MSG_FD_J1939 = 2;    // pgn filter delete
-    private static final int VNA_MSG_FA_J1708 = 3;    // pid filter add
-    private static final int VNA_MSG_FD_J1708 = 4;    // pid filter delete
-    private static final int VNA_MSG_TX_J1939 = 5;    // pgn tx
-    private static final int VNA_MSG_RX_J1939 = 6;    // pgn rx
-    private static final int VNA_MSG_PX_J1939 = 7;    // pgn tx - periodic
-    private static final int VNA_MSG_TX_J1708 = 8;    // pid tx
-    private static final int VNA_MSG_RX_J1708 = 9;    // pid rx
-    private static final int VNA_MSG_PX_J1587 = 10;   // pid tx - periodic
-    private static final int VNA_MSG_STATS = 23;   // stats msg - 1 sec
-    private static final int VNA_MSG_ACONN = 25;   // obd2 auto connect
-    private static final int VNA_MSG_FA_I15765 = 40;   // pid filter add
-    private static final int VNA_MSG_FD_I15765 = 41;   // pid filter delete
-    private static final int VNA_MSG_TX_I15765 = 42;   // pid tx
-    private static final int VNA_MSG_RX_I15765 = 43;   // pid rx
-    private static final int VNA_MSG_PX_I15765 = 44;   // pid tx - periodic
-    private static final int VNA_MSG_ODOMETER = 46;   // odometer
-    private static final int VNA_MSG_ACONN_EXT = 52;   // auto connect extended
-    private static final int VNA_MSG_GPS = 69;   // gps info
-    private static final int VNA_MSG_REQ = 255;  // request vna_msg
+    private static final byte VNA_MSG_ACK           = (byte) 0;     // ack
+    private static final byte VNA_MSG_FA_J1939      = (byte) 1;     // pgn filter add
+    private static final byte VNA_MSG_FD_J1939      = (byte) 2;     // pgn filter delete
+    private static final byte VNA_MSG_FA_J1708      = (byte) 3;     // pid filter add
+    private static final byte VNA_MSG_FD_J1708      = (byte) 4;     // pid filter delete
+    private static final byte VNA_MSG_TX_J1939      = (byte) 5;     // pgn tx
+    private static final byte VNA_MSG_RX_J1939      = (byte) 6;     // pgn rx
+    private static final byte VNA_MSG_PX_J1939      = (byte) 7;     // pgn tx - periodic
+    private static final byte VNA_MSG_TX_J1708      = (byte) 8;     // pid tx
+    private static final byte VNA_MSG_RX_J1708      = (byte) 9;     // pid rx
+    private static final byte VNA_MSG_PX_J1587      = (byte) 10;    // pid tx - periodic
+    private static final byte VNA_MSG_PAMODE_SET    = (byte) 18;    // passall mode config
+    private static final byte VNA_MSG_STATS         = (byte) 23;    // stats msg - 1 sec
+    private static final byte VNA_MSG_ACONN         = (byte) 25;    // obd2 auto connect
+    private static final byte VNA_MSG_VNA_ID        = (byte) 34;    // vna id and version
+    private static final byte VNA_MSG_FA_I15765     = (byte) 40;    // pid filter add
+    private static final byte VNA_MSG_FD_I15765     = (byte) 41;    // pid filter delete
+    private static final byte VNA_MSG_TX_I15765     = (byte) 42;    // pid tx
+    private static final byte VNA_MSG_RX_I15765     = (byte) 43;    // pid rx
+    private static final byte VNA_MSG_PX_I15765     = (byte) 44;    // pid tx - periodic
+    private static final byte VNA_MSG_ODOMETER      = (byte) 46;    // odometer
+    private static final byte VNA_MSG_ACONN_EXT     = (byte) 52;    // auto connect extended
+    private static final byte VNA_MSG_CHIRPCON      = (byte) 64;    // chirp control
+    private static final byte VNA_MSG_GPS           = (byte) 69;    // gps info
+    private static final byte VNA_MSG_REQ           = (byte) 255;   // request vna_msg
 
     private static final int NET_TYPE_OBD2_11 = (1 << 0);
     private static final int NET_TYPE_OBD2_29 = (1 << 1);
@@ -411,10 +415,36 @@ public class MainActivity extends AppCompatActivity {
         switch (packet[0] & 0xFF) {
             case VNA_MSG_ACK:
                 Log.v(TAG, "VNA_MSG_ACK");
+
+                // Byte 0:          message ID
+                // Byte 1:          acknowledged message ID
+
+                switch (packet[1] & 0xFF) {
+                    case VNA_MSG_VNA_ID:
+                        sendCommand(requestSetPassAllMode(PORT_0));
+                        break;
+
+                    case VNA_MSG_PAMODE_SET:
+                        sendCommand(requestSetOdometer(0));
+                        break;
+
+                    case VNA_MSG_ODOMETER:
+                        sendCommand(requestChirpControl());
+                        break;
+
+                    case VNA_MSG_CHIRPCON:
+                        sendCommand(requestAutoConnect(PORT_0));
+                        break;
+
+                    case VNA_MSG_ACONN_EXT:
+                        sendCommand(requestAutoConnectResult(PORT_0));
+                        break;
+                }
                 break;
 
             case VNA_MSG_RX_J1939:
                 Log.v(TAG, "VNA_MSG_RX_J1939");
+
                 final Integer pgn = ((packet[2] & 0xFF) << 16) | ((packet[3] & 0xFF) << 8) | (packet[4] & 0xFF);
                 Double d;
                 Integer i;
@@ -442,11 +472,21 @@ public class MainActivity extends AppCompatActivity {
                 }
                 break;
 
+            case VNA_MSG_PAMODE_SET:
+                Log.v(TAG, "VNA_MSG_PAMODE_SET");
+
+                break;
+
             case VNA_MSG_STATS:
                 Log.v(TAG, "VNA_MSG_STATS");
 
                 Long canFramesCount = (long) (((packet[9] & 0xFF) << 24) | ((packet[10] & 0xFF) << 16) | ((packet[11] & 0xFF) << 8) | (packet[12] & 0xFF));
                 newData.put("Frames", canFramesCount + " frames");
+                break;
+
+            case VNA_MSG_VNA_ID:
+                Log.v(TAG, "VNA_MSG_VNA_ID");
+
                 break;
 
             case VNA_MSG_ACONN_EXT:
@@ -460,6 +500,9 @@ public class MainActivity extends AppCompatActivity {
                 out = String.format("Port %d", (packet[1] & 0xFF));
 
                 network_type = ((packet[2] & 0xFF) << 24) | ((packet[3] & 0xFF) << 16) | ((packet[4] & 0xFF) << 8) | (packet[5] & 0xFF);
+                // TODO: Fix auto-connect problem
+                network_type = NET_TYPE_OBD2_11;
+//                network_type = NET_TYPE_J1939;
                 switch (network_type) {
                     case NET_TYPE_OBD2_11:
                         out += " / 11bit-OBD2";
@@ -479,6 +522,8 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 network_speed = ((packet[6] & 0xFF) << 24) | ((packet[7] & 0xFF) << 16) | ((packet[8] & 0xFF) << 8) | (packet[9] & 0xFF);
+                // TODO: Fix auto-connect problem
+                network_speed = 500000;
                 switch (network_speed) {
                     case 0:
                     case 250000:
@@ -662,7 +707,9 @@ public class MainActivity extends AppCompatActivity {
                 if (network_type == NET_TYPE_AUTOFAILED) {
                     switch (tenths) {
                         case 0:
-                            sendCommand(requestAutoConnect(PORT_0));
+                            // TODO: request VNA ID at the beginning
+//                            sendCommand(request(VNA_MSG_VNA_ID));
+                            sendCommand(requestSetPassAllMode(PORT_0));
                             break;
                     }
                 }
@@ -683,11 +730,65 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    public TxStruct request(byte id) {
+        byte[] payload = new byte[1];
+
+        payload[0] = id;
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
+    public TxStruct requestSetPassAllMode(byte port) {
+        byte[] payload = new byte[6];
+
+        payload[0] = VNA_MSG_PAMODE_SET;
+        payload[1] = port;
+        payload[2] = 1; // j1708
+        payload[3] = 1; // j1587
+        payload[4] = 1; // can
+        payload[5] = 1; // j1939
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
+    public TxStruct requestSetOdometer(int odometer) {
+        byte[] payload = new byte[5];
+
+        payload[0] = VNA_MSG_ODOMETER;
+        payload[1] = (byte) ((odometer >> 24) & 0xFF);
+        payload[2] = (byte) ((odometer >> 16) & 0xFF);
+        payload[3] = (byte) ((odometer >> 8) & 0xFF);
+        payload[4] = (byte) (odometer & 0xFF);
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
+    public TxStruct requestChirpControl() {
+        byte[] payload = new byte[5];
+
+        payload[0] = VNA_MSG_CHIRPCON;
+        payload[1] = (byte) 0xFF;
+        payload[2] = (byte) 0xFF;
+        payload[3] = (byte) 0xFF;
+        payload[4] = (byte) 0xFF;
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
     public TxStruct requestAutoConnect(byte port) {
+        byte[] payload = new byte[2];
+
+        payload[0] = VNA_MSG_ACONN_EXT;
+        payload[1] = port;
+
+        return new TxStruct(stuffMessage(buildMessage(payload)));
+    }
+
+    public TxStruct requestAutoConnectResult(byte port) {
         byte[] payload = new byte[3];
 
-        payload[0] = (byte) VNA_MSG_REQ;
-        payload[1] = (byte) VNA_MSG_ACONN_EXT;
+        payload[0] = VNA_MSG_REQ;
+        payload[1] = VNA_MSG_ACONN_EXT;
         payload[2] = port;
 
         return new TxStruct(stuffMessage(buildMessage(payload)));
