@@ -224,6 +224,10 @@ public class MainActivity extends AppCompatActivity {
             m_buffer = new byte[4096];
             m_count = 0;
 
+            tenths = 0;
+            seconds = 0;
+            network_type = NET_TYPE_AUTOFAILED;
+            network_speed = 0;
             handlerPeriodic.postDelayed(runnablePeriodic, 1000);
 
             if (readThread != null && readThread.isAlive()) {
@@ -414,30 +418,42 @@ public class MainActivity extends AppCompatActivity {
 
         switch (packet[0] & 0xFF) {
             case VNA_MSG_ACK:
-                Log.v(TAG, "VNA_MSG_ACK");
-
                 // Byte 0:          message ID
                 // Byte 1:          acknowledged message ID
 
                 switch (packet[1] & 0xFF) {
                     case VNA_MSG_VNA_ID:
+                        Log.v(TAG, "VNA_MSG_ACK -> VNA_MSG_VNA_ID");
+
                         sendCommand(requestSetPassAllMode(PORT_0));
                         break;
 
                     case VNA_MSG_PAMODE_SET:
+                        Log.v(TAG, "VNA_MSG_ACK -> VNA_MSG_PAMODE_SET");
+
                         sendCommand(requestSetOdometer(0));
                         break;
 
                     case VNA_MSG_ODOMETER:
+                        Log.v(TAG, "VNA_MSG_ACK -> VNA_MSG_ODOMETER");
+
                         sendCommand(requestChirpControl());
                         break;
 
                     case VNA_MSG_CHIRPCON:
+                        Log.v(TAG, "VNA_MSG_ACK -> VNA_MSG_CHIRPCON");
+
                         sendCommand(requestAutoConnect(PORT_0));
                         break;
 
                     case VNA_MSG_ACONN_EXT:
+                        Log.v(TAG, "VNA_MSG_ACK -> VNA_MSG_ACONN_EXT");
+
                         sendCommand(requestAutoConnectResult(PORT_0));
+                        break;
+
+                    default:
+                        Log.v(TAG, "VNA_MSG_ACK -> ?");
                         break;
                 }
                 break;
@@ -500,9 +516,6 @@ public class MainActivity extends AppCompatActivity {
                 out = String.format("Port %d", (packet[1] & 0xFF));
 
                 network_type = ((packet[2] & 0xFF) << 24) | ((packet[3] & 0xFF) << 16) | ((packet[4] & 0xFF) << 8) | (packet[5] & 0xFF);
-                // TODO: Fix auto-connect problem
-                network_type = NET_TYPE_OBD2_11;
-//                network_type = NET_TYPE_J1939;
                 switch (network_type) {
                     case NET_TYPE_OBD2_11:
                         out += " / 11bit-OBD2";
@@ -522,8 +535,6 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 network_speed = ((packet[6] & 0xFF) << 24) | ((packet[7] & 0xFF) << 16) | ((packet[8] & 0xFF) << 8) | (packet[9] & 0xFF);
-                // TODO: Fix auto-connect problem
-                network_speed = 500000;
                 switch (network_speed) {
                     case 0:
                     case 250000:
@@ -699,18 +710,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private int tenths = 0;
+    private int seconds = 0;
 
     private Runnable runnablePeriodic = new Runnable() {
         @Override
         public void run() {
             if (connected) {
                 if (network_type == NET_TYPE_AUTOFAILED) {
-                    switch (tenths) {
-                        case 0:
-                            // TODO: request VNA ID at the beginning
-//                            sendCommand(request(VNA_MSG_VNA_ID));
-                            sendCommand(requestSetPassAllMode(PORT_0));
-                            break;
+                    if ((seconds == 0) && (tenths == 0)) {
+                        // TODO: request VNA ID at the beginning
+//                        sendCommand(request(VNA_MSG_VNA_ID));
+                        sendCommand(requestSetPassAllMode(PORT_0));
                     }
                 }
                 else if ((network_type == NET_TYPE_OBD2_11) || (network_type == NET_TYPE_OBD2_29)) {
@@ -721,8 +731,13 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 tenths++;
-                if (tenths >= 10)
+                if (tenths >= 10) {
                     tenths = 0;
+                    seconds++;
+                    if (seconds >= 60) {
+                        seconds = 0;
+                    }
+                }
 
                 // Repeat the same runnable after 1 tenth of a second
                 handlerPeriodic.postDelayed(this, 100);
