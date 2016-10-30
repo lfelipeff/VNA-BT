@@ -37,6 +37,37 @@
             android:gravity="end" />
 
         <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="@string/Frames"
+            android:id="@+id/CANFramesLabel" />
+
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="@string/data_blank"
+            android:id="@+id/CANFramesField"
+            android:gravity="end" />
+
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="@string/Speed"
+            android:id="@+id/SpeedLabel" />
+
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="@string/data_blank"
+            android:id="@+id/SpeedField"
+            android:layout_gravity="end"
+            android:gravity="end" />
+
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="?android:attr/textAppearanceMedium"
@@ -66,37 +97,6 @@
             android:text="@string/data_blank"
             android:id="@+id/OdometerField"
             android:layout_gravity="end"
-            android:gravity="end" />
-
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:text="@string/OilPressure"
-            android:id="@+id/OilPressureLabel" />
-
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:text="@string/data_blank"
-            android:id="@+id/OilPressureField"
-            android:layout_gravity="end"
-            android:gravity="end" />
-
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:text="@string/Frames"
-            android:id="@+id/CANFramesLabel" />
-
-        <TextView
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:text="@string/data_blank"
-            android:id="@+id/CANFramesField"
             android:gravity="end" />
 
         <TextView

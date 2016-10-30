@@ -68,20 +68,21 @@ public class MainActivity extends AppCompatActivity {
     private static final byte VNA_MSG_GPS           = (byte) 69;    // gps info
     private static final byte VNA_MSG_REQ           = (byte) 255;   // request vna_msg
 
-    private static final int NET_TYPE_OBD2_11 = (1 << 0);
-    private static final int NET_TYPE_OBD2_29 = (1 << 1);
-    private static final int NET_TYPE_OBD2 = (NET_TYPE_OBD2_29 | NET_TYPE_OBD2_11);
-    private static final int NET_TYPE_J1939 = (1 << 2);
-    private static final int NET_TYPE_RAW_11 = (1 << 3);
-    private static final int NET_TYPE_RAW_29 = (1 << 4);
-    private static final int NET_TYPE_RAW = (NET_TYPE_RAW_29 | NET_TYPE_RAW_11);
-    private static final int NET_TYPE_AUTOFAILED = (1 << 31);
+    private static final int NET_TYPE_OBD2_11       = (1 << 0);
+    private static final int NET_TYPE_OBD2_29       = (1 << 1);
+    private static final int NET_TYPE_OBD2          = (NET_TYPE_OBD2_29 | NET_TYPE_OBD2_11);
+    private static final int NET_TYPE_J1939         = (1 << 2);
+    private static final int NET_TYPE_RAW_11        = (1 << 3);
+    private static final int NET_TYPE_RAW_29        = (1 << 4);
+    private static final int NET_TYPE_RAW           = (NET_TYPE_RAW_29 | NET_TYPE_RAW_11);
+    private static final int NET_TYPE_AUTOFAILED    = (1 << 31);
 
-    private static final int NET_SPD_UNKNOWNERR = (1 << 29);
-    private static final int NET_SPD_AUTOFAILED = (1 << 30);
-    private static final int NET_SPD_INITSTATE = (1 << 31);
+    private static final int NET_SPD_UNKNOWNERR     = (1 << 29);
+    private static final int NET_SPD_AUTOFAILED     = (1 << 30);
+    private static final int NET_SPD_INITSTATE      = (1 << 31);
 
-    private static final byte PID_RPM = 12;
+    private static final byte PID_RPM               = (byte) 0x0C;
+    private static final byte PID_SPEED             = (byte) 0x0D;
 
     private static final double KM_TO_MI = 0.621371;
     private static final double L_TO_GAL = 0.264172;
@@ -103,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
     private int network_type = NET_TYPE_AUTOFAILED;
     private int network_speed = 0;
+    private int speed = 0;
     private int rpm = 0;
     private int odometer = 0;
     private double latInDegrees = 0;
@@ -178,14 +180,14 @@ public class MainActivity extends AppCompatActivity {
 
         newData.put("Network Info", "");
         monitorFields.put("Network Info", R.id.NetworkInfoField);
+        newData.put("Frames", "");
+        monitorFields.put("Frames", R.id.CANFramesField);
+        newData.put("Speed", "");
+        monitorFields.put("Speed", R.id.SpeedField);
         newData.put("RPM", "");
         monitorFields.put("RPM", R.id.RPMField);
         newData.put("Odometer", "");
         monitorFields.put("Odometer", R.id.OdometerField);
-        newData.put("Oil Pressure", "");
-        monitorFields.put("Oil Pressure", R.id.OilPressureField);
-        newData.put("Frames", "");
-        monitorFields.put("Frames", R.id.CANFramesField);
         newData.put("Latitude", "");
         monitorFields.put("Latitude", R.id.LatitudeField);
         newData.put("Longitude", "");
@@ -469,7 +471,7 @@ public class MainActivity extends AppCompatActivity {
                     case 61444:
                         i = ((packet[12] & 0xFF) << 8) | (packet[11] & 0xFF);
                         if (i.equals(MAX_16)) break;
-                        newData.put("RPM", (i * 0.125 + "")); /* SPN 190 */
+                        newData.put("RPM", (i * 0.125 + "rpm")); /* SPN 190 */
                         break;
                     case 65262:
 //                        i = (packet[8] & 0xFF);
@@ -479,11 +481,11 @@ public class MainActivity extends AppCompatActivity {
 //                        newData.put("Coolant",out); /* SPN 110 */
                         break;
                     case 65263:
-                        i = (packet[11] & 0xFF);
-                        if (i.equals(MAX_8)) break;
-                        d = i * 4 * KPA_TO_PSI;
-                        out = String.format("%.2f psi", d);
-                        newData.put("Oil Pressure", out); /* SPN 100 */
+//                        i = (packet[11] & 0xFF);
+//                        if (i.equals(MAX_8)) break;
+//                        d = i * 4 * KPA_TO_PSI;
+//                        out = String.format("%.2f psi", d);
+//                        newData.put("Oil Pressure", out); /* SPN 100 */
                         break;
                 }
                 break;
@@ -557,11 +559,21 @@ public class MainActivity extends AppCompatActivity {
             case VNA_MSG_RX_I15765:
                 Log.v(TAG, "VNA_MSG_RX_I15765");
 
-                // Is this a powertrain response (0x41) for RPM (12)?
-                if (((packet[6] & 0xFF) == 0x41) && ((packet[7] & 0xFF) == PID_RPM)) {
-                    // 1/4 rpm per bit
-                    rpm = (((packet[8] & 0xFF) << 8) | (packet[9] & 0xFF)) / 4;
-                    newData.put("RPM", rpm + "");
+                // Is this a powertrain response (0x41)?
+                if ((packet[6] & 0xFF) == 0x41) {
+                    switch (packet[7] & 0xFF) {
+                        case PID_RPM:
+                            // 1/4 rpm per bit
+                            rpm = (((packet[8] & 0xFF) << 8) | (packet[9] & 0xFF)) / 4;
+                            newData.put("RPM", rpm + "rpm");
+                            break;
+
+                        case PID_SPEED:
+                            // 1 km/h per bit
+                            speed = (int) (((float) (packet[8] & 0xFF) * KM_TO_MI) + 0.5);
+                            newData.put("Speed", speed + "mph");
+                            break;
+                    }
                 }
                 break;
 
@@ -726,10 +738,15 @@ public class MainActivity extends AppCompatActivity {
                 else if ((network_type == NET_TYPE_OBD2_11) || (network_type == NET_TYPE_OBD2_29)) {
                     switch (tenths) {
                         case 0:
+                            sendCommand(requestFunctional(PORT_0, PID_SPEED));
+                            break;
+
+                        case 1:
                             sendCommand(requestFunctional(PORT_0, PID_RPM));
                             break;
                     }
                 }
+
                 tenths++;
                 if (tenths >= 10) {
                     tenths = 0;

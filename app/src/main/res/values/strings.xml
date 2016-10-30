@@ -12,10 +12,10 @@
     <string name="title_other_devices">Other Available Devices</string>
     <string name="button_scan">Scan for devices</string>
     <string name="NetworkInfo">Network Info:</string>
+    <string name="Frames">CAN frames:</string>
+    <string name="Speed">Speed:</string>
     <string name="RPM">Engine RPM:</string>
     <string name="Odometer">Odometer:</string>
-    <string name="OilPressure">Oil Pressure:</string>
-    <string name="Frames">CAN frames:</string>
     <string name="Latitude">Latitude:</string>
     <string name="Longitude">Longitude:</string>
     <string name="Satellites">Satellites in View:</string>
