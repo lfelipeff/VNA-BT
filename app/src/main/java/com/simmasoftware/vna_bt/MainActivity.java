@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.net.Uri;
+import android.net.Uri.Builder;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -26,6 +27,10 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.net.URL;
+import java.net.HttpURLConnection;
+
+import android.os.StrictMode;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -113,14 +118,18 @@ public class MainActivity extends AppCompatActivity {
 
     private Handler handlerPeriodic = new Handler();
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         initTextViews();
-    }
 
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy);
+        sendQuery();
+    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -753,6 +762,8 @@ public class MainActivity extends AppCompatActivity {
                     seconds++;
                     if (seconds >= 60) {
                         seconds = 0;
+
+                        sendQuery();
                     }
                 }
 
@@ -761,6 +772,37 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
+
+    public void sendQuery() {
+        Builder builder = new Builder();
+
+        builder.scheme("http")
+                .authority("pipeline.trinium4fuel.com")
+                .appendEncodedPath("cgi-bin/wspd_cgi-appsus1.sh/WService=ELD-WSV-LIVE/eld-integrator.w")
+                .appendQueryParameter("wfprogname", "elr_create.p")
+                .appendQueryParameter("speed", speed + "")
+                .appendQueryParameter("rpm", rpm + "")
+                .appendQueryParameter("odometer", odometer + "")
+                .appendQueryParameter("latitude", String.format("%.7f", latInDegrees))
+                .appendQueryParameter("longitude", String.format("%.7f", lonInDegrees))
+                .appendQueryParameter("satellites", noofSatellites + "")
+                .build();
+
+        try {
+            URL url = new URL(builder.build().toString());
+
+            Log.v(TAG, url.toString());
+
+            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+
+            Log.v(TAG, urlConnection.getResponseMessage());
+
+            urlConnection.disconnect();
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public TxStruct request(byte id) {
         byte[] payload = new byte[1];
