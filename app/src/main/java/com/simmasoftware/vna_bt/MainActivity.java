@@ -111,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
     private int network_speed = 0;
     private int speed = 0;
     private int rpm = 0;
-    private int odometer = 0;
+    private double odometer = 0;
     private double latInDegrees = 0;
     private double lonInDegrees = 0;
     private int noofSatellites = 0;
@@ -128,7 +128,6 @@ public class MainActivity extends AppCompatActivity {
 
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
-        sendQuery();
     }
 
     @Override
@@ -590,10 +589,10 @@ public class MainActivity extends AppCompatActivity {
                 Log.v(TAG, "VNA_MSG_ODOMETER");
 
                 // Byte 0:          message ID
-                // Byte 1,2,3,4:    odometer in km
+                // Byte 1,2,3,4:    odometer in tenths of miles
 
-                odometer = ((packet[1] & 0xFF) << 24) | ((packet[2] & 0xFF) << 16) | ((packet[3] & 0xFF) << 8) | (packet[4] & 0xFF);
-                newData.put("Odometer", odometer + "km");
+                odometer = (double) (((packet[1] & 0xFF) << 24) | ((packet[2] & 0xFF) << 16) | ((packet[3] & 0xFF) << 8) | (packet[4] & 0xFF)) / 10;
+                newData.put("Odometer", String.format("%.1f", odometer) + " miles");
                 break;
 
             case VNA_MSG_GPS:
@@ -782,7 +781,7 @@ public class MainActivity extends AppCompatActivity {
                 .appendQueryParameter("wfprogname", "elr_create.p")
                 .appendQueryParameter("speed", speed + "")
                 .appendQueryParameter("rpm", rpm + "")
-                .appendQueryParameter("odometer", odometer + "")
+                .appendQueryParameter("odometer", String.format("%.1f", odometer))
                 .appendQueryParameter("latitude", String.format("%.7f", latInDegrees))
                 .appendQueryParameter("longitude", String.format("%.7f", lonInDegrees))
                 .appendQueryParameter("satellites", noofSatellites + "")
@@ -825,14 +824,14 @@ public class MainActivity extends AppCompatActivity {
         return new TxStruct(stuffMessage(buildMessage(payload)));
     }
 
-    public TxStruct requestSetOdometer(int odometer) {
+    public TxStruct requestSetOdometer(double odometer) {
         byte[] payload = new byte[5];
 
         payload[0] = VNA_MSG_ODOMETER;
-        payload[1] = (byte) ((odometer >> 24) & 0xFF);
-        payload[2] = (byte) ((odometer >> 16) & 0xFF);
-        payload[3] = (byte) ((odometer >> 8) & 0xFF);
-        payload[4] = (byte) (odometer & 0xFF);
+        payload[1] = (byte) ((((int) (odometer * 10)) >> 24) & 0xFF);
+        payload[2] = (byte) ((((int) (odometer * 10)) >> 16) & 0xFF);
+        payload[3] = (byte) ((((int) (odometer * 10)) >> 8) & 0xFF);
+        payload[4] = (byte) (((int) (odometer * 10)) & 0xFF);
 
         return new TxStruct(stuffMessage(buildMessage(payload)));
     }
