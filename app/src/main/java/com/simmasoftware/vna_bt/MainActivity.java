@@ -25,6 +25,7 @@ import android.os.Handler;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.net.URL;
@@ -420,9 +421,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void processPacket(byte[] packet) {
-        String logOutput = String.format("packet[%d]:", packet.length);
+        String logOutput = String.format(Locale.US, "packet[%d]:", packet.length);
         for (byte b : packet) {
-            logOutput += String.format(" %02X", b);
+            logOutput += String.format(Locale.US, " %02X", b);
         }
         Log.v(TAG, logOutput);
 
@@ -485,14 +486,14 @@ public class MainActivity extends AppCompatActivity {
 //                        i = (packet[8] & 0xFF);
 //                        if(i.equals(MAX_8)) break;
 //                        d = (i - 40) * 9 / 5.0 + 32;
-//                        out = String.format("%.1f%s",d,DEGREE);
+//                        out = String.format(Locale.US, "%.1f%s",d,DEGREE);
 //                        newData.put("Coolant",out); /* SPN 110 */
                         break;
                     case 65263:
 //                        i = (packet[11] & 0xFF);
 //                        if (i.equals(MAX_8)) break;
 //                        d = i * 4 * KPA_TO_PSI;
-//                        out = String.format("%.2f psi", d);
+//                        out = String.format(Locale.US, "%.2f psi", d);
 //                        newData.put("Oil Pressure", out); /* SPN 100 */
                         break;
                 }
@@ -523,7 +524,7 @@ public class MainActivity extends AppCompatActivity {
                 // Byte 2,3,4,5:    network type
                 // Byte 6,7,8,9:    network speed
 
-                out = String.format("Port %d", (packet[1] & 0xFF));
+                out = String.format(Locale.US, "Port %d", (packet[1] & 0xFF));
 
                 network_type = ((packet[2] & 0xFF) << 24) | ((packet[3] & 0xFF) << 16) | ((packet[4] & 0xFF) << 8) | (packet[5] & 0xFF);
                 switch (network_type) {
@@ -592,7 +593,7 @@ public class MainActivity extends AppCompatActivity {
                 // Byte 1,2,3,4:    odometer in tenths of miles
 
                 odometer = (double) (((packet[1] & 0xFF) << 24) | ((packet[2] & 0xFF) << 16) | ((packet[3] & 0xFF) << 8) | (packet[4] & 0xFF)) / 10;
-                newData.put("Odometer", String.format("%.1f", odometer) + " miles");
+                newData.put("Odometer", String.format(Locale.US, "%.1f", odometer) + " miles");
                 break;
 
             case VNA_MSG_GPS:
@@ -616,7 +617,7 @@ public class MainActivity extends AppCompatActivity {
                         | ((packet[4] & 0xFF) << 8)
                         | (packet[5] & 0xFF)) / 100000)) / 60))
                         * (((packet[6] & 0xFF) == 'S') ? -1 : 1);
-                newData.put("Latitude", String.format("%.7f", latInDegrees));
+                newData.put("Latitude", String.format(Locale.US, "%.7f", latInDegrees));
 
                 // Longitude = Degrees + (Minutes + .minutes) / 60
                 lonInDegrees = ((packet[7] & 0xFF)
@@ -625,7 +626,7 @@ public class MainActivity extends AppCompatActivity {
                         | ((packet[10] & 0xFF) << 8)
                         | (packet[11] & 0xFF)) / 100000)) / 60))
                         * (((packet[12] & 0xFF) == 'W') ? -1 : 1);
-                newData.put("Longitude", String.format("%.7f", lonInDegrees));
+                newData.put("Longitude", String.format(Locale.US, "%.7f", lonInDegrees));
 
                 noofSatellites = packet[13];
                 newData.put("Satellites", noofSatellites + "");
@@ -779,11 +780,12 @@ public class MainActivity extends AppCompatActivity {
                 .authority("pipeline.trinium4fuel.com")
                 .appendEncodedPath("cgi-bin/wspd_cgi-appsus1.sh/WService=ELD-WSV-LIVE/eld-integrator.w")
                 .appendQueryParameter("wfprogname", "elr_create.p")
+                .appendQueryParameter("supcode", "luisf")
                 .appendQueryParameter("speed", speed + "")
                 .appendQueryParameter("rpm", rpm + "")
-                .appendQueryParameter("odometer", String.format("%.1f", odometer))
-                .appendQueryParameter("latitude", String.format("%.7f", latInDegrees))
-                .appendQueryParameter("longitude", String.format("%.7f", lonInDegrees))
+                .appendQueryParameter("odometer", String.format(Locale.US, "%.1f", odometer))
+                .appendQueryParameter("latitude", String.format(Locale.US, "%.7f", latInDegrees))
+                .appendQueryParameter("longitude", String.format(Locale.US, "%.7f", lonInDegrees))
                 .appendQueryParameter("satellites", noofSatellites + "")
                 .build();
 
