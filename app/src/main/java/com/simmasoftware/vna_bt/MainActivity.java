@@ -617,7 +617,7 @@ public class MainActivity extends AppCompatActivity {
                         | ((packet[4] & 0xFF) << 8)
                         | (packet[5] & 0xFF)) / 100000)) / 60))
                         * (((packet[6] & 0xFF) == 'S') ? -1 : 1);
-                newData.put("Latitude", String.format(Locale.US, "%.7f", latInDegrees));
+                newData.put("Latitude", String.format(Locale.US, "%.8f", latInDegrees));
 
                 // Longitude = Degrees + (Minutes + .minutes) / 60
                 lonInDegrees = ((packet[7] & 0xFF)
@@ -626,7 +626,7 @@ public class MainActivity extends AppCompatActivity {
                         | ((packet[10] & 0xFF) << 8)
                         | (packet[11] & 0xFF)) / 100000)) / 60))
                         * (((packet[12] & 0xFF) == 'W') ? -1 : 1);
-                newData.put("Longitude", String.format(Locale.US, "%.7f", lonInDegrees));
+                newData.put("Longitude", String.format(Locale.US, "%.8f", lonInDegrees));
 
                 noofSatellites = packet[13];
                 newData.put("Satellites", noofSatellites + "");
@@ -784,8 +784,8 @@ public class MainActivity extends AppCompatActivity {
                 .appendQueryParameter("speed", speed + "")
                 .appendQueryParameter("rpm", rpm + "")
                 .appendQueryParameter("odometer", String.format(Locale.US, "%.1f", odometer))
-                .appendQueryParameter("latitude", String.format(Locale.US, "%.7f", latInDegrees))
-                .appendQueryParameter("longitude", String.format(Locale.US, "%.7f", lonInDegrees))
+                .appendQueryParameter("latitude", String.format(Locale.US, "%.8f", latInDegrees))
+                .appendQueryParameter("longitude", String.format(Locale.US, "%.8f", lonInDegrees))
                 .appendQueryParameter("satellites", noofSatellites + "")
                 .build();
 
